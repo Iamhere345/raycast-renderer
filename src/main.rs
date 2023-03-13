@@ -1,3 +1,12 @@
+use winit::{event_loop::{EventLoop}, event::{Event, WindowEvent}, window::WindowBuilder, dpi::LogicalSize};
+use winit::event_loop::EventLoop;
+use winit::event::{Event, WindowEvent};
+use winit::window::WindowBuilder;
+use winit::dpi::LogicalSize;
+use winit::event::VirtualKeyCode;
+
+use winit_input_helper::WinitInputHelper;
+
 const MAP_WIDTH: usize = 24;
 const MAP_HEIGHT: usize = 24;
 
@@ -71,10 +80,50 @@ fn main() {
     let mut time: f64 = 0.0;
     let mut old_time: f64 = 0.0;
 
-    // raycast loop
-    
+    // setup winit
+    let event_loop = EventLoop::new();
+
+    let window = WindowBuilder::new()
+        .with_title("Raycast Renderer")
+        .with_inner_size(LogicalSize::new(SCREEN_WIDTH, SCREEN_HEIGHT))
+        .with_resizable(false)
+        .build(&event_loop)
+        .expect("Unable to create window.");
+
+    let input = WinitInputHelper::new();
+
+    event_loop.run(move |event, _, control_flow| {
+
+        control_flow.set_poll();
+
+        match event {
+            Event::MainEventsCleared => {
+                window.request_redraw();
+            },
+            Event::RedrawRequested(_) => {
+
+                // todo input
+                update(&mut screen, &mut player);
+
+            },
+            _ => ()
+        }
+
+    })
 
 }
 
 // TODO render with pixels and winit
 fn render(framebuffer: &PixelBuf) {}
+
+fn update(screen: &mut PixelBuf, player: &mut Player) {
+
+    for x in 0..SCREEN_WIDTH {
+
+        let camera_x: f64 = 2.0 * x as f64 / SCREEN_WIDTH as f64;
+        let ray = Vec2::<f64>::new(player.dir.x + player.plane.x * camera_x, player.dir.y + player.plane.y * camera_x);
+        let ray_dir_x: f64 = player.dir.x + player.plane.x * camera_x;
+
+    }
+
+}

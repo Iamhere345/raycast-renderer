@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../raycast-renderer"
+		},
+		{
+			"path": "../winit-test"
 		}
 	],
 	"settings": {}
