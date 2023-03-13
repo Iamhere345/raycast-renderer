@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Instant;
 
 use winit::event_loop::EventLoop;
 use winit::event::{Event, WindowEvent, ElementState};
@@ -80,8 +81,8 @@ fn main() {
     };
 
     // time for fps counter
-    let mut time: f64 = 0.0;
-    let mut old_time: f64 = 0.0;
+    let mut time: Instant = Instant::now();
+    let mut old_time: Instant = Instant::now();
 
     // setup winit
     let event_loop = EventLoop::new();
@@ -105,8 +106,13 @@ fn main() {
             },
             Event::RedrawRequested(_) => {
 
+                time = Instant::now();
+
                 // todo input
-                update(&mut screen, &mut player);
+                update(&mut screen, &mut player, time.elapsed().as_secs_f64() - old_time.elapsed().as_secs_f64());
+                render(&mut screen);
+
+                old_time = time;
 
             },
             _ => ()
@@ -119,7 +125,7 @@ fn main() {
 // TODO render with pixels and winit
 fn render(framebuffer: &PixelBuf) {}
 
-fn update(screen: &mut PixelBuf, player: &mut Player) {
+fn update(screen: &mut PixelBuf, player: &mut Player, delta_time: f64) {
 
     let WALL_COLOURS: HashMap<&str, (u8, u8, u8)> = HashMap::from([
         ("Red", (255, 0, 0)),
