@@ -9,6 +9,8 @@ use winit::event::VirtualKeyCode;
 
 use winit_input_helper::WinitInputHelper;
 
+use pixels::{Error, Pixels, SurfaceTexture};
+
 const MAP_WIDTH: usize = 24;
 const MAP_HEIGHT: usize = 24;
 
@@ -48,7 +50,7 @@ const WALL_HEIGHT: i32 = 20;
 const MOVE_SPEED: f64 = 5.0;
 const ROT_SPEED: f64 = 3.0;
 
-type PixelBuf = [u32; SCREEN_WIDTH * SCREEN_HEIGHT];
+type PixelBuf = Vec<u32>;
 
 struct Vec2<T> {
     x: T,
@@ -72,9 +74,14 @@ struct Player {
     plane: Vec2<f64>
 }
 
-fn main() {
 
-    let mut screen: PixelBuf = [0; SCREEN_HEIGHT * SCREEN_WIDTH];
+fn main() {
+    
+    println!("please");
+
+    // this array is too big and causes a stack overflow
+    let mut screen: PixelBuf = Vec::with_capacity(SCREEN_HEIGHT * SCREEN_WIDTH);
+    unsafe { screen.set_len(SCREEN_HEIGHT * SCREEN_WIDTH) };
 
     // initialise player structure
     let mut player = Player {
@@ -90,6 +97,8 @@ fn main() {
     // setup winit
     let event_loop = EventLoop::new();
 
+    println!("before window");
+
     let window = WindowBuilder::new()
         .with_title("Raycast Renderer")
         .with_inner_size(LogicalSize::new(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32))
@@ -98,6 +107,14 @@ fn main() {
         .expect("Unable to create window.");
 
     let mut winit_input = WinitInputHelper::new();
+
+    let mut pixels = {
+        let window_size = window.inner_size();
+        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
+        Pixels::new(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32, surface_texture).unwrap()
+    };
+
+    println!("init");
 
     event_loop.run(move |event, _, control_flow| {
 
@@ -110,9 +127,13 @@ fn main() {
             Event::RedrawRequested(_) => {
 
                 time = Instant::now();
-                let delta_time = time.elapsed().as_secs_f64() - old_time.elapsed().as_secs_f64();
+
+                //println!("time: {} - oldtime: {}", time.elapsed().as_secs_f64(), old_time.elapsed().as_secs_f64());
+
+                let mut delta_time = time.elapsed().as_secs_f64() - old_time.elapsed().as_secs_f64();
+
                 // clear frame so theres no ghosting (like what you see when you noclip through the map in half-life)
-                screen = [0; SCREEN_HEIGHT * SCREEN_WIDTH];
+                //screen.iter_mut().for_each(|x| *x = 0);
 
                 // todo input
                 if winit_input.update(&event) {
@@ -120,10 +141,16 @@ fn main() {
                 }
 
                 update(&mut screen, &mut player, time.elapsed().as_secs_f64() - old_time.elapsed().as_secs_f64());
-                render(&screen);
+                render(&screen, pixels.get_frame_mut());
 
                 old_time = time;
 
+            },
+            Event::WindowEvent { 
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
+                control_flow.set_exit();
             },
             _ => ()
         }
@@ -133,7 +160,21 @@ fn main() {
 }
 
 // TODO render with pixels and winit
-fn render(framebuffer: &PixelBuf) {}
+fn render(framebuffer: &PixelBuf, render_buffer: &mut [u8]) {
+
+    for (i, (render, frame)) in render_buffer.chunks_exact_mut(4).zip(framebuffer.iter()).enumerate() {
+        let x = (i % SCREEN_WIDTH) as i16;
+        let y = (i / SCREEN_HEIGHT) as i16;
+
+        let (r, g, b, a) = unpack_color(frame);
+
+        //println!("rendering pixel of colour: ({}, {}, {}, {})", r, g, b, a);
+
+        render.copy_from_slice(&[r, g, b, a]);
+
+    }
+
+}
 
 fn update(screen: &mut PixelBuf, player: &mut Player, delta_time: f64) {
 
@@ -157,7 +198,7 @@ fn update(screen: &mut PixelBuf, player: &mut Player, delta_time: f64) {
         let mut side_dist = Vec2::<f64>::new(0.0, 0.0);
 
         let delta_dist = Vec2::<f64>::new(if ray_dir.x == 0.0 { f64::INFINITY } else { (1.0 / ray_dir.x).abs() }, if ray_dir.y == 0.0 { f64::INFINITY } else { (1.0 / ray_dir.y).abs() });
-        let mut perp_wall_dist: f64;
+        let perp_wall_dist: f64;
 
         let mut step = Vec2::<i32>::new(0, 0);
         
@@ -239,7 +280,7 @@ fn update(screen: &mut PixelBuf, player: &mut Player, delta_time: f64) {
     }
 
     // fps counter. Displays in standard output because i don't want to setup text rendering
-    println!("FPS: {}", 1.0 / delta_time);
+    println!("FPS: {}", 1.0 / (delta_time * -1.0));
 
 }
 
@@ -301,6 +342,8 @@ fn input(player: &mut Player, input: &WinitInputHelper, delta_time: f64) {
 }
 
 fn draw_line(framebuffer: &mut PixelBuf, x: usize, y0: usize, y1: usize, colour: u32) {
+
+    println!("draw line: {}", colour);
 
     for y in y0..y1 {
         framebuffer[x + y * SCREEN_WIDTH] = colour;
