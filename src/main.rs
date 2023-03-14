@@ -45,6 +45,9 @@ const MAP: [[u32; MAP_WIDTH]; MAP_HEIGHT] =
 
 const WALL_HEIGHT: i32 = 20;
 
+const MOVE_SPEED: f64 = 5.0;
+const ROT_SPEED: f64 = 3.0;
+
 type PixelBuf = [u32; SCREEN_WIDTH * SCREEN_HEIGHT];
 
 struct Vec2<T> {
@@ -94,7 +97,7 @@ fn main() {
         .build(&event_loop)
         .expect("Unable to create window.");
 
-    let input = WinitInputHelper::new();
+    let mut winit_input = WinitInputHelper::new();
 
     event_loop.run(move |event, _, control_flow| {
 
@@ -107,10 +110,17 @@ fn main() {
             Event::RedrawRequested(_) => {
 
                 time = Instant::now();
+                let delta_time = time.elapsed().as_secs_f64() - old_time.elapsed().as_secs_f64();
+                // clear frame so theres no ghosting (like what you see when you noclip through the map in half-life)
+                screen = [0; SCREEN_HEIGHT * SCREEN_WIDTH];
 
                 // todo input
+                if winit_input.update(&event) {
+                    input(&mut player, &winit_input, delta_time)
+                }
+
                 update(&mut screen, &mut player, time.elapsed().as_secs_f64() - old_time.elapsed().as_secs_f64());
-                render(&mut screen);
+                render(&screen);
 
                 old_time = time;
 
@@ -226,6 +236,66 @@ fn update(screen: &mut PixelBuf, player: &mut Player, delta_time: f64) {
 
         draw_line(screen, x, draw_start as usize, draw_end as usize, wall_colour);
 
+    }
+
+    // fps counter. Displays in standard output because i don't want to setup text rendering
+    println!("FPS: {}", 1.0 / delta_time);
+
+}
+
+fn input(player: &mut Player, input: &WinitInputHelper, delta_time: f64) {
+
+    let move_speed: f64 = MOVE_SPEED * delta_time;
+    let rot_speed: f64 = ROT_SPEED * delta_time;
+
+    // forward
+    if input.key_held(VirtualKeyCode::W) {
+        if MAP[(player.pos.x + player.dir.x * move_speed).floor() as usize][player.pos.y.floor() as usize] == 0 {
+            player.pos.x += player.dir.x * move_speed
+        }
+        if MAP[player.pos.x.floor() as usize][(player.pos.y + player.dir.y * move_speed).floor() as usize] == 0 {
+            player.pos.y += player.dir.y * move_speed
+        }
+    }
+
+    // backward
+    if input.key_held(VirtualKeyCode::S) {
+        if MAP[(player.pos.x - player.dir.x * move_speed).floor() as usize][player.pos.y.floor() as usize] == 0 {
+            player.pos.x -= player.dir.x * move_speed
+        }
+        if MAP[player.pos.x.floor() as usize][(player.pos.y - player.dir.y * move_speed).floor() as usize] == 0 {
+            player.pos.y -= player.dir.y * move_speed
+        }
+    }
+
+    // turn left
+    if input.key_held(VirtualKeyCode::A) {
+        // both camera direction and camera plane must be rotated
+        // TODO learn vector rotation
+        let old_dir_x = player.dir.x;
+
+        player.dir.x *= rot_speed.cos() - player.dir.y * rot_speed.sin();
+        player.dir.y = old_dir_x * rot_speed.sin() + player.dir.y * rot_speed.cos();
+
+        let old_plane_x = player.plane.x;
+        
+        player.plane.x *= rot_speed.cos() - player.plane.y * rot_speed.sin();
+        player.plane.y = old_plane_x * rot_speed.sin() + player.plane.y * rot_speed.cos();
+    }
+
+    // turn right
+    if input.key_held(VirtualKeyCode::D) {
+        // both camera direction and camera plane must be rotated
+        // TODO learn vector rotation
+        let old_dir_x = player.dir.x;
+
+        player.dir.x *= -rot_speed.cos() - player.dir.y * -rot_speed.sin();
+        player.dir.y = old_dir_x * -rot_speed.sin() + player.dir.y * -rot_speed.cos();
+
+        let old_plane_x = player.plane.x;
+        
+        player.plane.x *= -rot_speed.cos() - player.plane.y * -rot_speed.sin();
+        player.plane.y = old_plane_x * -rot_speed.sin() + player.plane.y * -rot_speed.cos();
     }
 
 }
