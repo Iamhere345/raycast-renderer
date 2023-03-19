@@ -2,10 +2,9 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use winit::event_loop::EventLoop;
-use winit::event::{Event, WindowEvent, ElementState};
+use winit::event::{Event, WindowEvent, VirtualKeyCode};
 use winit::window::WindowBuilder;
 use winit::dpi::LogicalSize;
-use winit::event::VirtualKeyCode;
 
 use winit_input_helper::WinitInputHelper;
 
@@ -77,8 +76,6 @@ struct Player {
 
 fn main() {
     
-    println!("please");
-
     // this array is too big and causes a stack overflow
     let mut screen: PixelBuf = Vec::with_capacity(SCREEN_HEIGHT * SCREEN_WIDTH);
     unsafe { screen.set_len(SCREEN_HEIGHT * SCREEN_WIDTH) };
@@ -97,12 +94,10 @@ fn main() {
     // setup winit
     let event_loop = EventLoop::new();
 
-    println!("before window");
-
     let window = WindowBuilder::new()
         .with_title("Raycast Renderer")
         .with_inner_size(LogicalSize::new(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32))
-        .with_resizable(false)
+        .with_resizable(true)
         .build(&event_loop)
         .expect("Unable to create window.");
 
@@ -114,11 +109,9 @@ fn main() {
         Pixels::new(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32, surface_texture).unwrap()
     };
 
-    println!("init");
-
     event_loop.run(move |event, _, control_flow| {
 
-        control_flow.set_poll();
+        //control_flow.set_poll();
 
         match event {
             Event::MainEventsCleared => {
@@ -130,27 +123,34 @@ fn main() {
 
                 //println!("time: {} - oldtime: {}", time.elapsed().as_secs_f64(), old_time.elapsed().as_secs_f64());
 
-                let mut delta_time = time.elapsed().as_secs_f64() - old_time.elapsed().as_secs_f64();
+                let delta_time = time.elapsed().as_secs_f64() - old_time.elapsed().as_secs_f64();
 
                 // clear frame so theres no ghosting (like what you see when you noclip through the map in half-life)
                 //screen.iter_mut().for_each(|x| *x = 0);
 
                 // todo input
                 if winit_input.update(&event) {
-                    input(&mut player, &winit_input, delta_time)
+                    println!("input1");
+                    input(&mut player, &winit_input, delta_time);;
+
+                    if winit_input.key_pressed(VirtualKeyCode::Escape) {
+                        control_flow.set_exit();
+                    }
+
                 }
 
                 update(&mut screen, &mut player, time.elapsed().as_secs_f64() - old_time.elapsed().as_secs_f64());
                 render(&screen, pixels.get_frame_mut());
 
+                pixels.render().expect("Render failed");
+
                 old_time = time;
 
             },
-            Event::WindowEvent { 
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
-                control_flow.set_exit();
+            Event::WindowEvent { event: window_event, .. } => match window_event {
+                WindowEvent::CloseRequested => control_flow.set_exit(),
+                //WindowEvent::Resized(new_size) => pixels.resize_surface(new_size.width, new_size.height).unwrap(),
+                _ => ()
             },
             _ => ()
         }
@@ -162,16 +162,67 @@ fn main() {
 // TODO render with pixels and winit
 fn render(framebuffer: &PixelBuf, render_buffer: &mut [u8]) {
 
-    for (i, (render, frame)) in render_buffer.chunks_exact_mut(4).zip(framebuffer.iter()).enumerate() {
-        let x = (i % SCREEN_WIDTH) as i16;
-        let y = (i / SCREEN_HEIGHT) as i16;
+    /*
+    for pixel in framebuffer.iter() {
+        let (r, g, b, a) = unpack_color(pixel);
+
+        println!("rendering pixel {}", pixel);
+
+        if *pixel != 0 {
+            panic!();
+        }
+
+        //println!("rendering pixel of colour: ({}, {}, {}, {})", r, g, b, a);
+    }
+    */
+
+    /*
+    for (render, frame) in (render_buffer.chunks_exact_mut(4).zip(framebuffer.iter())) {
+        //let x = (i % SCREEN_WIDTH) as i16;
+        //let y = (i / SCREEN_HEIGHT) as i16;
 
         let (r, g, b, a) = unpack_color(frame);
 
-        //println!("rendering pixel of colour: ({}, {}, {}, {})", r, g, b, a);
+        println!("rendering pixel of colour: ({}, {}, {}, {})", r, g, b, a);
 
         render.copy_from_slice(&[r, g, b, a]);
 
+    }
+    */
+    
+    for (i, pixel) in render_buffer.chunks_exact_mut(4).enumerate() {
+        let x = (i % SCREEN_WIDTH) as usize;
+        let y = (i / SCREEN_HEIGHT) as usize;
+
+        let index = x + y * SCREEN_WIDTH;
+
+        //println!("index: {}", index);
+
+        if index >= framebuffer.len() {
+            continue;
+        }
+
+        let pixel_colour = framebuffer[index];
+
+        let (r, g, b, a) = unpack_color(pixel_colour);
+
+        if pixel_colour != 0 {
+            //println!("rendering pixel of colour: ({}, {}, {}, {}) at ({}, {})", r, g, b, a, x, y);
+        }
+
+        //println!("rendering pixel of colour: ({}, {}, {}, {})", r, g, b, a);
+        
+        if pixel_colour != 0 {
+            pixel.copy_from_slice(&[r, g, b, a]);
+            //println!("rendered {:?} at ({}, {})", pixel, x, y);
+        }
+
+    }
+    
+    for pixel in render_buffer.chunks_exact(4) {
+        if pixel[1] != 0 {
+            //println!("pixel colour: ({}, {}, {}, {})", pixel[0], pixel[1], pixel[2], pixel[3]);
+        }
     }
 
 }
@@ -265,7 +316,11 @@ fn update(screen: &mut PixelBuf, player: &mut Player, delta_time: f64) {
             2 => WALL_COLOURS.get(&"Green"),
             3 => WALL_COLOURS.get(&"Blue"),
             4 => WALL_COLOURS.get(&"Teal"),
-            _ => WALL_COLOURS.get(&"White")
+            _ => {
+                println!("E");
+                println!("hit: {}", MAP[map_pos.x as usize][map_pos.y as usize]);
+                WALL_COLOURS.get(&"White")
+            }
         }.unwrap();
 
         let mut wall_colour = pack_colour(wall_colour_unpacked.0, wall_colour_unpacked.1, wall_colour_unpacked.2);
@@ -286,12 +341,15 @@ fn update(screen: &mut PixelBuf, player: &mut Player, delta_time: f64) {
 
 fn input(player: &mut Player, input: &WinitInputHelper, delta_time: f64) {
 
+    println!("input2");
+
     let move_speed: f64 = MOVE_SPEED * delta_time;
     let rot_speed: f64 = ROT_SPEED * delta_time;
 
     // forward
     if input.key_held(VirtualKeyCode::W) {
         if MAP[(player.pos.x + player.dir.x * move_speed).floor() as usize][player.pos.y.floor() as usize] == 0 {
+            println!("move forward");
             player.pos.x += player.dir.x * move_speed
         }
         if MAP[player.pos.x.floor() as usize][(player.pos.y + player.dir.y * move_speed).floor() as usize] == 0 {
@@ -343,9 +401,10 @@ fn input(player: &mut Player, input: &WinitInputHelper, delta_time: f64) {
 
 fn draw_line(framebuffer: &mut PixelBuf, x: usize, y0: usize, y1: usize, colour: u32) {
 
-    println!("draw line: {}", colour);
+    //println!("draw line: {}", colour);
 
     for y in y0..y1 {
+        //println!("drawing at ({}, {}), buffer position {}",  x, y0, x + y * SCREEN_WIDTH);
         framebuffer[x + y * SCREEN_WIDTH] = colour;
     }
 
@@ -356,7 +415,7 @@ fn pack_colour(r: u8, g: u8, b: u8) -> u32 {
     ((0 as u32) << 24) + ((b as u32) << 16) + ((g as u32) << 8) + (r as u32)
 }
 
-fn unpack_color(color: &u32) -> (u8, u8, u8, u8) {
+fn unpack_color(color: u32) -> (u8, u8, u8, u8) {
     let r: u8 = (color & 255) as u8;
     let g: u8 = ((color >> 8) & 255) as u8;
     let b: u8 = ((color >> 16) & 255) as u8;
