@@ -4,10 +4,10 @@
 			"path": "."
 		},
 		{
-			"path": "../raycast-renderer"
+			"path": "../winit-test"
 		},
 		{
-			"path": "../winit-test"
+			"path": "../raycast-renderer-old"
 		}
 	],
 	"settings": {}

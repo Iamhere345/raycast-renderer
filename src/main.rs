@@ -47,8 +47,10 @@ const MAP: [[u32; MAP_WIDTH]; MAP_HEIGHT] =
 
 const WALL_HEIGHT: i32 = 200;
 
-const MOVE_SPEED: f64 = 500.0;
+const MOVE_SPEED: f64 = 50000.0;
 const ROT_SPEED: f64 = 30000.0;
+
+const MINIMAP_WALL_SIZE: usize = 20;
 
 #[derive(Debug, Clone, Copy)]
 enum WallColours {
@@ -96,9 +98,9 @@ fn main() {
 
     // initialise player structure
     let mut player = Player {
-        pos: Vec2::<f64>::new(12.0, 12.0),
+        pos: Vec2::<f64>::new(22.0, 12.0),
         dir: Vec2::<f64>::new(-1.0, 0.0),
-        plane: Vec2::<f64>::new(0.0, 0.66)
+        plane: Vec2::<f64>::new(0.0, 0.33)
     };
 
     // time for fps counter
@@ -204,6 +206,7 @@ fn render(framebuffer: &PixelBuf, render_buffer: &mut [u8]) {
 
 fn update(screen: &mut PixelBuf, player: &mut Player, delta_time: f64) {
 
+    // render 3D
     for x in 0..SCREEN_WIDTH {
 
         let camera_x: f64 = 2.0 * x as f64 / SCREEN_WIDTH as f64 - 1.0;
@@ -280,12 +283,20 @@ fn update(screen: &mut PixelBuf, player: &mut Player, delta_time: f64) {
 
         //println!("perp wall dist: {perp_wall_dist}");
 
-        let line_height: i32 = SCREEN_HEIGHT as i32 / perp_wall_dist as i32;
+        let line_height: i32;
+
+        if perp_wall_dist as i32 == 0 {
+            println!("wall height max");
+            line_height = SCREEN_HEIGHT as i32;
+        } else {
+            line_height = SCREEN_HEIGHT as i32 / perp_wall_dist as i32;
+        }
+
 
        // let line_height: i32 = WALL_HEIGHT / ((player.pos.x - perp_wall_dist).powi(2) + (player.pos.y - perp_wall_dist).powi(2)).sqrt() as i32;
 
 
-        println!("perp wall dist: {perp_wall_dist}");
+        //println!("perp wall dist: {perp_wall_dist}");
 
         let mut draw_start: i32 = -line_height / 2 + SCREEN_HEIGHT as i32 / 2;
         let mut draw_end: i32 = line_height / 2 + SCREEN_HEIGHT as i32 / 2;
@@ -317,7 +328,7 @@ fn update(screen: &mut PixelBuf, player: &mut Player, delta_time: f64) {
         // give walls a different brightness
         if side == 1 {
             for colour in wall_colour.iter_mut() {
-                //*colour /= 2;
+                *colour /= 2;
             }
         }
 
@@ -326,6 +337,9 @@ fn update(screen: &mut PixelBuf, player: &mut Player, delta_time: f64) {
         draw_line(screen, x, draw_start as usize, draw_end as usize, wall_colour);
 
     }
+
+    let width = SCREEN_WIDTH / 4;
+    let height = SCREEN_HEIGHT / 4;
 
     // fps counter. Displays in standard output because i don't want to setup text rendering
     //println!("FPS: {}", 1.0 / (delta_time * -1.0));
@@ -345,7 +359,6 @@ fn input(player: &mut Player, input: &WinitInputHelper, delta_time: f64) {
         if wish_pos.x.floor() as usize <= MAP_WIDTH && MAP[wish_pos.x.floor() as usize][player.pos.y.floor() as usize] == 0 {
             player.pos.x += player.dir.x * move_speed
         }
-
 
         if wish_pos.y.floor() as usize <= MAP_HEIGHT && MAP[player.pos.x.floor() as usize][wish_pos.y.floor() as usize] == 0 {
             player.pos.y += player.dir.y * move_speed
@@ -384,6 +397,11 @@ fn input(player: &mut Player, input: &WinitInputHelper, delta_time: f64) {
     if input.key_held(VirtualKeyCode::D) {
         // both camera direction and camera plane must be rotated
         // TODO learn vector rotation
+        // TODO turning right is broken
+
+        println!("KEY RIGHT");
+
+        /* 
         let old_dir_x = player.dir.x;
 
         player.dir.x *= -rot_speed.cos() - player.dir.y * -rot_speed.sin();
@@ -393,19 +411,52 @@ fn input(player: &mut Player, input: &WinitInputHelper, delta_time: f64) {
         
         player.plane.x *= -rot_speed.cos() - player.plane.y * -rot_speed.sin();
         player.plane.y = old_plane_x * -rot_speed.sin() + player.plane.y * -rot_speed.cos();
+        */
+
+        let old_dir_x = player.dir.x;
+
+        player.dir.x *= -(rot_speed.cos() - player.dir.y * rot_speed.sin());
+        player.dir.y = -(old_dir_x * rot_speed.sin() + player.dir.y * rot_speed.cos());
+
+        let old_plane_x = player.plane.x;
+        
+        player.plane.x *= -(rot_speed.cos() - player.plane.y * rot_speed.sin());
+        player.plane.y = -(old_plane_x * rot_speed.sin() + player.plane.y * rot_speed.cos());
     }
 
 }
 
 fn draw_line(framebuffer: &mut PixelBuf, x: usize, y0: usize, y1: usize, colour: WallColour) {
 
-    //println!("draw line: {}", colour);
+    if colour[0] == 0x0 && colour[1] == 0x0 && colour[2] == 0x0 {
+        println!("draw line: {:?}", colour);
+    }
+
 
     for y in y0..y1 {
         //println!("drawing at ({}, {}), buffer position {}",  x, y0, x + y * SCREEN_WIDTH);
         framebuffer[x + y * SCREEN_WIDTH] = colour;
     }
 
+}
+
+fn draw_rect(framebuffer: &mut PixelBuf, width: usize, height: usize, x: usize, y: usize, colour: WallColour) {
+
+    for x_offset in 0..width {
+        for y_offset in 0..height {
+
+            let pixel_x = x + x_offset;
+            let pixel_y = y + y_offset;
+
+            if pixel_x > SCREEN_WIDTH || pixel_y > SCREEN_HEIGHT || pixel_x + pixel_y * SCREEN_WIDTH >= SCREEN_WIDTH * SCREEN_HEIGHT {
+                continue;
+            }
+
+            framebuffer[pixel_x + pixel_y * SCREEN_WIDTH] = colour;
+
+        }
+    }
+        
 }
 
 // TODO
